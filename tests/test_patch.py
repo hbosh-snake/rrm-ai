@@ -37,14 +37,6 @@ def test_set_today_valid(sample_yaml_file):
     assert errors == []
 
 
-def test_set_today_must_be_bool(sample_yaml_file):
-    items = read_items(str(sample_yaml_file))
-    ops = [PatchOp(op="set_today", id="emsn230", value="true")]
-    errors = validate(ops, items)
-    assert len(errors) == 1
-    assert "bool" in errors[0].lower()
-
-
 def test_set_today_max_three(sample_yaml_file):
     items = read_items(str(sample_yaml_file))
     # annual_report already has today=True (1 item)

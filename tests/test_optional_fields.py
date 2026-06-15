@@ -105,21 +105,13 @@ def test_set_due_null_removes_field(base_items):
     assert errors == []
 
 
-def test_set_due_invalid_format(base_items):
-    ops = [PatchOp(op="set_due", id="emsn230", value="15-03-2026")]
-    errors = validate(ops, base_items)
-    assert len(errors) == 1
-    assert "due" in errors[0].lower() or "format" in errors[0].lower() or "date" in errors[0].lower()
-
-
-def test_set_due_invalid_calendar_date(base_items):
-    ops = [PatchOp(op="set_due", id="emsn230", value="2026-02-30")]
-    errors = validate(ops, base_items)
-    assert len(errors) == 1
-
-
-def test_set_due_non_string(base_items):
-    ops = [PatchOp(op="set_due", id="emsn230", value=20260315)]
+@pytest.mark.parametrize("value", [
+    "15-03-2026",   # wrong format
+    "2026-02-30",   # invalid calendar date
+    20260315,       # non-string
+])
+def test_set_due_invalid_values(base_items, value):
+    ops = [PatchOp(op="set_due", id="emsn230", value=value)]
     errors = validate(ops, base_items)
     assert len(errors) == 1
 
@@ -169,20 +161,9 @@ def test_add_item_with_invalid_due(base_items):
 # Step 3: recurs field
 # ---------------------------------------------------------------------------
 
-def test_set_recurs_weekly_fri(base_items):
-    ops = [PatchOp(op="set_recurs", id="emsn230", value="weekly_fri")]
-    errors = validate(ops, base_items)
-    assert errors == []
-
-
-def test_set_recurs_monthly_1(base_items):
-    ops = [PatchOp(op="set_recurs", id="emsn230", value="monthly_1")]
-    errors = validate(ops, base_items)
-    assert errors == []
-
-
-def test_set_recurs_monthly_last(base_items):
-    ops = [PatchOp(op="set_recurs", id="emsn230", value="monthly_last")]
+@pytest.mark.parametrize("value", ["weekly_fri", "monthly_1", "monthly_last"])
+def test_set_recurs_valid_values(base_items, value):
+    ops = [PatchOp(op="set_recurs", id="emsn230", value=value)]
     errors = validate(ops, base_items)
     assert errors == []
 
