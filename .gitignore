@@ -18,4 +18,4 @@ rrm-auto-today.txt
 rrm-status.yaml
 rrm-archive.yaml
 
-.claude/settings.local.json
+.claude/

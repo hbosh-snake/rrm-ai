@@ -46,3 +46,13 @@ uv tool install --reinstall --editable .   # reinstall CLI after changes
 ```
 
 Every new module must be added to `py-modules` in `pyproject.toml` before reinstalling.
+
+---
+
+## Codebase Overview
+
+**Stack:** Python, Anthropic Claude API (`claude-sonnet-4-5-20250929`), `ruamel.yaml`, `rich`, `python-dotenv`  
+**Structure:** Flat module layout — one file per concern. No packages, no sub-directories for source.  
+**Pipeline:** user text → `adapters.py` (LLM tool call) → `patch.py` (validate + apply) → `yaml_utils.py` (write)
+
+For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
