@@ -1,0 +1,3 @@
+anthropic
+ruamel.yaml
+python-dotenv
