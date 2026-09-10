@@ -54,12 +54,19 @@ Two new modules, plus one extraction.
 Owns `yaml_path`, the adapter, the current `items` list, and the
 message thread. No rendering, no user I/O. Its entire surface:
 
-- `Session.start()` — load items, run auto-today promotion, return items
+- `Session.start()` — load items, run auto-today promotion, return items.
+  The load-and-promote step becomes a module function `load_items(yaml_path)`
+  in `session.py`, which the one-shot path in `rrm_ai.py` also calls, so the
+  promotion logic exists once rather than twice.
 - `Session.submit(text)` — return `TextReply(markdown)` or
   `PatchProposal(ops, diffs)`; runs the validate-and-retry loop internally.
-  Both are frozen dataclasses defined in `session.py`. `PatchProposal`
-  carries the validated `ops` and the rendered `diffs` so the frontend
-  displays without recomputing.
+  Validation failures that survive the retry return a third outcome,
+  `ValidationFailure(errors)`, so the frontend can report them without
+  the thread being touched. All three are frozen dataclasses defined in
+  `session.py`. `PatchProposal` carries the validated `ops`, the
+  rendered `diffs`, and the `request` text that produced it, so the
+  frontend displays without recomputing and `accept`/`decline` can
+  record the turn.
 - `Session.accept(proposal)` — back up, write YAML, refresh `items`,
   record the applied turn, append to `rrm-history.json`
 - `Session.decline(proposal)` — record the rejection turn, discard the ops
@@ -80,7 +87,12 @@ REPL share it. Behavior unchanged, including the existing sort order.
 ### Unchanged
 
 `adapters.py`, `patch.py`, `yaml_utils.py`, `auto_today.py`,
-`config.py`, `theme.py`, `memory.py`.
+`config.py`, `theme.py`.
+
+`memory.py` gains `set_due` and `set_recurs` branches in
+`format_patch_result`, which today silently drops both op types. The
+session uses that function for its assistant turn text, so the gap
+would make an applied due-date change invisible to the thread.
 
 `prompts.py` changes in exactly one way, described below.
 
@@ -110,15 +122,24 @@ it, and it survives across sessions where the thread does not.
 
 ### Turn recording
 
+The Anthropic Messages API requires strictly alternating user and
+assistant roles, so the outcome of a patch cannot be a synthetic user
+turn appended after the assistant's. It is appended to the assistant
+turn instead, which keeps the thread alternating and puts the outcome
+next to the patch it describes.
+
 | Outcome | Recorded |
 | --- | --- |
 | Query | User turn, assistant text reply. |
-| Applied patch | User turn, assistant turn, then a synthetic user turn: `Applied. Current state follows.` |
-| Declined patch | User turn, assistant turn, then a synthetic user turn: `NOT applied — the user declined this patch. The state is unchanged.` |
+| Applied patch | User turn, then an assistant turn: the patch summary plus `[Applied to the status file.]` |
+| Declined patch | User turn, then an assistant turn: the patch summary plus `[NOT applied — the user declined this patch. The state is unchanged.]` |
 | Validation retry | Internal to `submit()`. Only the final proposal enters the thread. |
 
 The declined wording is deliberately explicit. The failure to avoid is
 the model later treating a proposed-but-declined change as done.
+
+Every thread entry is therefore a plain user or assistant message, and
+the thread always begins with a user message.
 
 ### Trimming
 
@@ -184,8 +205,8 @@ A one-shot process can crash and lose nothing. A session cannot.
 
 - API errors, network failures, and validation failures print a message
   and return to the prompt with the thread intact
-- A failed turn is rolled back out of the thread rather than left
-  half-written
+- Nothing is appended to the thread until a turn succeeds, so a failed
+  turn cannot leave it half-written
 - `Ctrl-C` at the prompt clears the current line
 - `Ctrl-C` mid-request cancels that turn and returns to the prompt
 - Only `/quit` and `Ctrl-D` exit
@@ -231,6 +252,6 @@ routes to the session, unknown `/foo` never reaches the LLM. The
 
 Per the project guardrail, tests are added only where behavior is new.
 Nothing in `patch.py`, `yaml_utils.py`, or `auto_today.py` changes, so
-the existing 147 tests stay as they are. Two tests in `test_rrm_ai.py`
+the existing 156 tests stay as they are. Two tests in `test_rrm_ai.py`
 cover bare-invocation behavior and `print_status`'s location; both are
 updated, not deleted.
