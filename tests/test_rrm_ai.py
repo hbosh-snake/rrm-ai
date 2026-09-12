@@ -5,7 +5,8 @@ from textwrap import dedent
 from pathlib import Path
 from rich.console import Console
 
-from rrm_ai import main, print_status
+from rrm_ai import main
+from render import print_status
 from patch import PatchOp
 from yaml_utils import read_items
 from memory import history_path
@@ -300,27 +301,6 @@ class TestHistoryIntegration:
 
 class TestColoredOutput:
     """Verify that terminal output carries ANSI color codes when a TTY is present."""
-
-    def test_print_status_emits_ansi_codes(self, capsys):
-        items = [{"id": "x", "item": "Some task", "status": "in_progress",
-                  "today": False, "next_action": "do it"}]
-        print_status(items, console=Console(force_terminal=True))
-        output = capsys.readouterr().out
-        assert "\x1b[" in output, "Expected ANSI codes in status output"
-
-    def test_print_status_today_marker_present(self, capsys):
-        items = [{"id": "z", "item": "Focus task", "status": "in_progress",
-                  "today": True, "next_action": "focus"}]
-        print_status(items, console=Console())
-        output = capsys.readouterr().out
-        assert "*" in output
-
-    def test_print_status_no_today_marker_when_false(self, capsys):
-        items = [{"id": "z", "item": "Task", "status": "waiting",
-                  "today": False, "next_action": "wait"}]
-        print_status(items, console=Console())
-        output = capsys.readouterr().out
-        assert "*" not in output
 
     def test_validation_error_output_contains_error_text(self, yaml_env, capsys):
         ops = [PatchOp(op="set_status", id="nonexistent", value="waiting")]

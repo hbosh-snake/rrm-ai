@@ -4,7 +4,6 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.markdown import Markdown
-from rich.markup import escape
 from rich.theme import Theme
 
 from config import load_config, load_yaml_path
@@ -14,47 +13,9 @@ from adapters import get_adapter
 from prompts import build_system_prompt, build_user_message
 from daily_brief import build_daily_brief_prompt
 from memory import history_path, load_history, save_history, format_patch_result
-from theme import THEME, STATUS_STYLES, LLM_MARKDOWN_THEME
+from theme import THEME, LLM_MARKDOWN_THEME
 from auto_today import auto_promote_today, load_auto_today_date, save_auto_today_date
-
-
-def print_status(items: list, console: Console | None = None) -> None:
-    if console is None:
-        console = Console()
-
-    STATUS_ORDER = {"in_progress": 0, "waiting": 1}
-
-    def sort_key(item):
-        today_rank = 0 if item.get("today") else 1
-        status_rank = STATUS_ORDER.get(item.get("status"), 2)
-        return (today_rank, status_rank)
-
-    for item in sorted(items, key=sort_key):
-        status = item["status"]
-        style = STATUS_STYLES.get(status, "")
-        today_marker = f" [{THEME['today_marker']}]*[/]" if item.get("today") else ""
-        id_part = f"[{THEME['item_id']}]{escape(item['id'])}[/]"
-        status_tag = f"[{style}]{escape(f'[{status}]')}[/]"
-        console.print(
-            f"  {status_tag}{today_marker}  {id_part}  {escape(item['item'])}"
-        )
-
-        next_part = f"[{THEME['next_action']}]{escape(item['next_action'])}[/]"
-        line2 = f"      next: {next_part}"
-
-        hints = []
-        if item.get("due"):
-            hints.append(
-                f"[{THEME['optional_field']}]due: {escape(str(item['due']))}[/]"
-            )
-        if item.get("recurs"):
-            hints.append(
-                f"[{THEME['optional_field']}]recurs: {escape(str(item['recurs']))}[/]"
-            )
-        if hints:
-            line2 += "  " + "  ".join(hints)
-
-        console.print(line2)
+from render import print_status
 
 
 def main() -> None:
