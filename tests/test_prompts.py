@@ -73,3 +73,9 @@ class TestHistory:
         history = [{"request": "old req", "result": "old res"}]
         msg = build_user_message("follow up", items, history=history)
         assert msg.index("Recent history") < msg.index("Current RRM status")
+
+
+def test_system_prompt_has_no_affirmation_shortcut():
+    prompt = build_system_prompt()
+    assert "Confirmation handling" not in prompt
+    assert "short affirmation" not in prompt

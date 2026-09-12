@@ -44,12 +44,6 @@ Identification
   generate a patch. List the candidates with their id and item fields
   and ask the user to clarify.
 
-Confirmation handling
-- If the user's message is a short affirmation ("yes", "y", "1", "ok",
-  "correct", "do it") and the recent history shows a pending proposed
-  change, treat it as confirmation and apply that change immediately.
-- Do not re-ask for confirmation of something you already asked about.
-
 Patch discipline
 - Never regenerate the full file.
 - Never modify fields not explicitly requested.
