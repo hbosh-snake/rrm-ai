@@ -24,7 +24,8 @@ def print_status(items: list, console: Console | None = None) -> None:
         id_part = f"[{THEME['item_id']}]{escape(item['id'])}[/]"
         status_tag = f"[{style}]{escape(f'[{status}]')}[/]"
         console.print(
-            f"  {status_tag}{today_marker}  {id_part}  {escape(item['item'])}"
+            f"  {status_tag}{today_marker}  {id_part}  {escape(item['item'])}",
+            highlight=False
         )
 
         next_part = f"[{THEME['next_action']}]{escape(item['next_action'])}[/]"
@@ -42,4 +43,4 @@ def print_status(items: list, console: Console | None = None) -> None:
         if hints:
             line2 += "  " + "  ".join(hints)
 
-        console.print(line2)
+        console.print(line2, highlight=False)
