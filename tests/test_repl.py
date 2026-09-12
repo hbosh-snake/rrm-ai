@@ -133,6 +133,99 @@ def test_archive_command_moves_finished_items_and_refreshes_the_session(tmp_path
     assert "archived" in output.lower()
 
 
+def test_apply_prompt_ctrl_c_declines_and_the_loop_continues(capsys):
+    from repl import run
+
+    session = MagicMock()
+    session.items = [{"id": "demo001", "item": "Activation: Demo", "status": "in_progress",
+                      "today": True, "next_action": "Do the thing."}]
+
+    def submit_side_effect(text):
+        if text == "make a change":
+            return PatchProposal(ops=[], diffs=["+ x"], request=text)
+        raise AssertionError(f"unexpected submit text: {text}")
+
+    session.submit.side_effect = submit_side_effect
+
+    prompts = ["make a change", EOFError()]
+    fake_prompt_session = MagicMock()
+    fake_prompt_session.prompt.side_effect = prompts
+
+    with patch("repl.PromptSession", return_value=fake_prompt_session):
+        with patch("builtins.input", side_effect=KeyboardInterrupt()):
+            run(session, console=_console())
+
+    session.decline.assert_called_once()
+    session.accept.assert_not_called()
+
+    output = capsys.readouterr().out
+    assert "Declined" in output
+
+
+def test_apply_prompt_eof_error_declines_and_the_loop_continues(capsys):
+    from repl import run
+
+    session = MagicMock()
+    session.items = []
+
+    def submit_side_effect(text):
+        if text == "make a change":
+            return PatchProposal(ops=[], diffs=["+ x"], request=text)
+        raise AssertionError(f"unexpected submit text: {text}")
+
+    session.submit.side_effect = submit_side_effect
+
+    prompts = ["make a change", EOFError()]
+    fake_prompt_session = MagicMock()
+    fake_prompt_session.prompt.side_effect = prompts
+
+    with patch("repl.PromptSession", return_value=fake_prompt_session):
+        with patch("builtins.input", side_effect=EOFError()):
+            run(session, console=_console())
+
+    session.decline.assert_called_once()
+    session.accept.assert_not_called()
+
+    output = capsys.readouterr().out
+    assert "Declined" in output
+
+
+def test_exception_in_slash_command_does_not_crash_the_loop(capsys):
+    from repl import run
+
+    session = MagicMock()
+    session.items = []
+    session.submit.side_effect = RuntimeError("brief boom")
+
+    prompts = ["/brief", EOFError()]
+    fake_prompt_session = MagicMock()
+    fake_prompt_session.prompt.side_effect = prompts
+
+    with patch("repl.PromptSession", return_value=fake_prompt_session):
+        run(session, console=_console())
+
+    output = capsys.readouterr().out
+    assert "RuntimeError" in output and "brief boom" in output
+
+
+@pytest.mark.parametrize(
+    "result, expected_snippet",
+    [
+        (ValidationFailure(["id not found"]), "id not found"),
+        (PatchProposal(ops=[], diffs=["+ x"], request="brief"), "Proposed changes"),
+    ],
+)
+def test_brief_command_shows_output_for_non_text_reply(capsys, result, expected_snippet):
+    session = MagicMock()
+    session.submit.return_value = result
+
+    with patch("builtins.input", return_value="n"):
+        handle_command("/brief", session, _console())
+
+    output = capsys.readouterr().out
+    assert expected_snippet in output
+
+
 def test_run_dispatches_each_result_kind_and_survives_a_ctrl_c(capsys):
     from repl import run
 

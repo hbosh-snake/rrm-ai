@@ -79,14 +79,34 @@ def handle_command(name: str, session, console: Console) -> bool:
         print_status(session.items, console=console)
     elif name == "/brief":
         result = session.submit(build_daily_brief_prompt())
-        if isinstance(result, TextReply):
-            _print_markdown(result.text, console)
+        _dispatch_result(result, session, console)
     return True
+
+
+def _dispatch_result(result, session, console: Console) -> None:
+    """Route a session.submit outcome to its handler.
+
+    Shared by run()'s llm branch and the /brief command, which both submit
+    a prompt and must handle all three possible outcome types.
+    """
+    if isinstance(result, TextReply):
+        _print_markdown(result.text, console)
+    elif isinstance(result, ValidationFailure):
+        console.print(f"[{THEME['error_header']}]Validation errors:[/]")
+        for e in result.errors:
+            console.print(f"  [{THEME['error_line']}]✗ {e}[/]")
+    elif isinstance(result, PatchProposal):
+        _handle_proposal(result, session, console)
 
 
 def _handle_proposal(proposal: PatchProposal, session, console: Console) -> None:
     _print_diffs(proposal.diffs, console)
-    answer = input("\nApply? [Y/n] ").strip().lower()
+    try:
+        answer = input("\nApply? [Y/n] ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        session.decline(proposal)
+        console.print(f"[{THEME['aborted']}]Declined.[/]")
+        return
     if answer in ("", "y"):
         session.accept(proposal)
         console.print(f"[{THEME['success']}]Applied.[/]")
@@ -128,8 +148,11 @@ def run(session, console: Console | None = None) -> None:
             console.print(f"[{THEME['error_line']}]unknown command: {payload}[/]")
             continue
         if kind == "command":
-            if not handle_command(payload, session, console):
-                break
+            try:
+                if not handle_command(payload, session, console):
+                    break
+            except Exception as exc:
+                console.print(f"[{THEME['error_line']}]{type(exc).__name__}: {exc}[/]")
             continue
 
         try:
@@ -142,11 +165,4 @@ def run(session, console: Console | None = None) -> None:
             console.print(f"[{THEME['error_line']}]{type(exc).__name__}: {exc}[/]")
             continue
 
-        if isinstance(result, TextReply):
-            _print_markdown(result.text, console)
-        elif isinstance(result, ValidationFailure):
-            console.print(f"[{THEME['error_header']}]Validation errors:[/]")
-            for e in result.errors:
-                console.print(f"  [{THEME['error_line']}]✗ {e}[/]")
-        elif isinstance(result, PatchProposal):
-            _handle_proposal(result, session, console)
+        _dispatch_result(result, session, console)
