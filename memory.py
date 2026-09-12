@@ -36,6 +36,10 @@ def format_patch_result(ops: list[PatchOp]) -> str:
             parts.append(f"set_today({op.id}, {op.value})")
         elif op.op == "set_next_action":
             parts.append(f"set_next_action({op.id})")
+        elif op.op == "set_due":
+            parts.append(f"set_due({op.id}, {op.value})")
+        elif op.op == "set_recurs":
+            parts.append(f"set_recurs({op.id}, {op.value})")
         elif op.op == "add_item":
             parts.append(f"add_item({op.id})")
     return ", ".join(parts)

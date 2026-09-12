@@ -97,3 +97,15 @@ class TestFormatPatchResult:
 
     def test_empty_ops(self):
         assert format_patch_result([]) == ""
+
+    def test_format_patch_result_covers_set_due(self):
+        ops = [PatchOp(op="set_due", id="demo041", value="2026-10-01")]
+        assert format_patch_result(ops) == "set_due(demo041, 2026-10-01)"
+
+    def test_format_patch_result_covers_set_recurs(self):
+        ops = [PatchOp(op="set_recurs", id="demo041", value="weekly_fri")]
+        assert format_patch_result(ops) == "set_recurs(demo041, weekly_fri)"
+
+    def test_format_patch_result_covers_clearing_due(self):
+        ops = [PatchOp(op="set_due", id="demo041", value=None)]
+        assert format_patch_result(ops) == "set_due(demo041, None)"
