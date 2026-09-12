@@ -75,7 +75,7 @@ class Session:
         messages = self.thread + [
             {"role": "user", "content": build_user_message(text, self.items)}
         ]
-        result, _assistant_content, _tool_use_id = self.adapter.complete_messages(
+        result, assistant_content, tool_use_id = self.adapter.complete_messages(
             system, messages
         )
 
@@ -83,7 +83,46 @@ class Session:
             self._append(text, result)
             return TextReply(result)
 
-        raise NotImplementedError("patch proposals arrive in Task 4")
+        ops = result
+        errors = validate(ops, self.items)
+
+        if errors and tool_use_id is not None:
+            retried = self._retry(system, messages, assistant_content, tool_use_id, errors)
+            result, assistant_content, tool_use_id = retried
+            if isinstance(result, str):
+                self._append(text, result)
+                return TextReply(result)
+            ops = result
+            errors = validate(ops, self.items)
+
+        if errors:
+            return ValidationFailure(errors)
+
+        new_items = apply(ops, self.items)
+        return PatchProposal(ops=ops, diffs=diff_items(self.items, new_items), request=text)
+
+    def _retry(self, system: str, messages: list[dict], assistant_content, tool_use_id: str, errors: list[str]):
+        """Feed validation errors back as a tool_result and ask once more.
+
+        These turns are deliberately local: only the final outcome reaches
+        the thread, so a rejected proposal never becomes conversation.
+        """
+        error_text = "Validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        retry_messages = messages + [
+            {"role": "assistant", "content": assistant_content},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": error_text,
+                        "is_error": True,
+                    }
+                ],
+            },
+        ]
+        return self.adapter.complete_messages(system, retry_messages)
 
     def _append(self, user_text: str, assistant_text: str) -> None:
         """Record one alternating pair and trim to the cap."""

@@ -118,3 +118,107 @@ def test_failed_api_call_leaves_thread_untouched(session):
         session.submit("what is in focus?")
 
     assert session.thread == []
+
+
+from session import PatchProposal, ValidationFailure
+
+
+def test_submit_valid_patch_returns_proposal(session):
+    session.start()
+    ops = [PatchOp(op="set_status", id="emsn230", value="waiting")]
+    session.adapter.results = [(ops, [], None)]
+
+    result = session.submit("put Sri Lanka on waiting")
+
+    assert isinstance(result, PatchProposal)
+    assert result.ops == ops
+    assert result.request == "put Sri Lanka on waiting"
+    assert any("emsn230" in d for d in result.diffs)
+
+
+def test_proposal_does_not_touch_the_thread(session):
+    session.start()
+    ops = [PatchOp(op="set_status", id="emsn230", value="waiting")]
+    session.adapter.results = [(ops, [], None)]
+
+    session.submit("put Sri Lanka on waiting")
+
+    assert session.thread == []
+
+
+def test_proposal_does_not_write_the_file(session, sample_yaml_file):
+    session.start()
+    before = sample_yaml_file.read_text()
+    ops = [PatchOp(op="set_status", id="emsn230", value="waiting")]
+    session.adapter.results = [(ops, [], None)]
+
+    session.submit("put Sri Lanka on waiting")
+
+    assert sample_yaml_file.read_text() == before
+
+
+def test_invalid_patch_is_retried_once(session):
+    session.start()
+    bad = [PatchOp(op="set_status", id="nonexistent", value="waiting")]
+    good = [PatchOp(op="set_status", id="emsn230", value="waiting")]
+    session.adapter.results = [(bad, [], "tool_1"), (good, [], "tool_2")]
+
+    result = session.submit("put Sri Lanka on waiting")
+
+    assert isinstance(result, PatchProposal)
+    assert result.ops == good
+    assert len(session.adapter.calls) == 2
+
+
+def test_retry_sends_the_errors_as_a_tool_result(session):
+    session.start()
+    bad = [PatchOp(op="set_status", id="nonexistent", value="waiting")]
+    good = [PatchOp(op="set_status", id="emsn230", value="waiting")]
+    session.adapter.results = [(bad, [], "tool_1"), (good, [], "tool_2")]
+
+    session.submit("put Sri Lanka on waiting")
+
+    retry_messages = session.adapter.calls[1]["messages"]
+    tool_result = retry_messages[-1]["content"][0]
+    assert tool_result["type"] == "tool_result"
+    assert tool_result["tool_use_id"] == "tool_1"
+    assert tool_result["is_error"] is True
+    assert "nonexistent" in tool_result["content"]
+
+
+def test_retry_answering_in_text_returns_a_text_reply(session):
+    session.start()
+    bad = [PatchOp(op="set_status", id="nonexistent", value="waiting")]
+    session.adapter.results = [
+        (bad, [], "tool_1"),
+        ("There is no item with that id.", [], None),
+    ]
+
+    result = session.submit("mark the thing done")
+
+    assert isinstance(result, TextReply)
+    assert result.text == "There is no item with that id."
+    assert session.thread[-1]["content"] == "There is no item with that id."
+
+
+def test_still_invalid_after_retry_returns_validation_failure(session):
+    session.start()
+    bad = [PatchOp(op="set_status", id="nonexistent", value="waiting")]
+    session.adapter.results = [(bad, [], "tool_1"), (bad, [], "tool_2")]
+
+    result = session.submit("change something")
+
+    assert isinstance(result, ValidationFailure)
+    assert any("nonexistent" in e for e in result.errors)
+    assert session.thread == []
+
+
+def test_invalid_patch_without_tool_use_id_is_not_retried(session):
+    session.start()
+    bad = [PatchOp(op="set_status", id="nonexistent", value="waiting")]
+    session.adapter.results = [(bad, [], None)]
+
+    result = session.submit("change something")
+
+    assert isinstance(result, ValidationFailure)
+    assert len(session.adapter.calls) == 1
