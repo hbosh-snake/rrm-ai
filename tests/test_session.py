@@ -222,3 +222,134 @@ def test_invalid_patch_without_tool_use_id_is_not_retried(session):
 
     assert isinstance(result, ValidationFailure)
     assert len(session.adapter.calls) == 1
+
+
+import json
+from pathlib import Path
+
+from memory import history_path
+from session import APPLIED_NOTE, DECLINED_NOTE
+from yaml_utils import read_items
+
+
+def _propose(session, ops, request="change it"):
+    session.adapter.results = [(ops, [], None)]
+    return session.submit(request)
+
+
+def test_accept_writes_the_file(session, sample_yaml_file):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")])
+
+    session.accept(proposal)
+
+    items = read_items(str(sample_yaml_file))
+    assert next(i for i in items if i["id"] == "emsn230")["status"] == "waiting"
+
+
+def test_accept_refreshes_items_and_returns_them(session):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")])
+
+    returned = session.accept(proposal)
+
+    assert next(i for i in returned if i["id"] == "emsn230")["status"] == "waiting"
+    assert session.items == returned
+
+
+def test_accept_creates_a_backup(session, sample_yaml_file):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")])
+
+    session.accept(proposal)
+
+    assert Path(str(sample_yaml_file) + ".bak").exists()
+
+
+def test_accept_records_an_alternating_pair(session):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")], "put it on waiting")
+
+    session.accept(proposal)
+
+    assert len(session.thread) == 2
+    assert session.thread[0] == {"role": "user", "content": "put it on waiting"}
+    assert session.thread[1]["role"] == "assistant"
+    assert "set_status(emsn230, waiting)" in session.thread[1]["content"]
+    assert APPLIED_NOTE in session.thread[1]["content"]
+
+
+def test_accept_appends_to_history_file(session, sample_yaml_file):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")], "put it on waiting")
+
+    session.accept(proposal)
+
+    data = json.loads(Path(history_path(str(sample_yaml_file))).read_text())
+    assert data[-1]["request"] == "put it on waiting"
+    assert "emsn230" in data[-1]["result"]
+
+
+def test_decline_leaves_the_file_byte_identical(session, sample_yaml_file):
+    session.start()
+    before = sample_yaml_file.read_text()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")])
+
+    session.decline(proposal)
+
+    assert sample_yaml_file.read_text() == before
+
+
+def test_decline_records_the_rejection_explicitly(session):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")], "put it on waiting")
+
+    session.decline(proposal)
+
+    assert session.thread[1]["role"] == "assistant"
+    assert DECLINED_NOTE in session.thread[1]["content"]
+    assert "set_status(emsn230, waiting)" in session.thread[1]["content"]
+
+
+def test_decline_writes_no_history(session, sample_yaml_file):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")])
+
+    session.decline(proposal)
+
+    assert not Path(history_path(str(sample_yaml_file))).exists()
+
+
+def test_thread_alternates_after_mixed_turns(session):
+    session.start()
+    session.adapter.results = [("a text answer", [], None)]
+    session.submit("a question")
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")])
+    session.accept(proposal)
+
+    roles = [m["role"] for m in session.thread]
+    assert roles == ["user", "assistant", "user", "assistant"]
+
+
+def test_thread_trims_to_the_cap_oldest_pair_first(session):
+    session.start()
+    for n in range(12):
+        session.adapter.results = [(f"answer {n}", [], None)]
+        session.submit(f"question {n}")
+
+    assert len(session.thread) == 20
+    assert session.thread[0] == {"role": "user", "content": "question 2"}
+    assert session.thread[0]["role"] == "user"
+
+
+def test_retry_turns_stay_out_of_the_thread(session):
+    session.start()
+    bad = [PatchOp(op="set_status", id="nonexistent", value="waiting")]
+    good = [PatchOp(op="set_status", id="emsn230", value="waiting")]
+    session.adapter.results = [(bad, [], "tool_1"), (good, [], "tool_2")]
+
+    proposal = session.submit("put Sri Lanka on waiting")
+    session.accept(proposal)
+
+    assert len(session.thread) == 2
+    assert all("tool_result" not in str(m["content"]) for m in session.thread)

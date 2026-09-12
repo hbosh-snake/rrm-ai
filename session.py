@@ -10,11 +10,14 @@ from datetime import date
 from pathlib import Path
 
 from auto_today import auto_promote_today, load_auto_today_date, save_auto_today_date
+from memory import format_patch_result, history_path, load_history, save_history
 from patch import PatchOp, apply, validate
 from prompts import build_system_prompt, build_user_message
 from yaml_utils import backup, diff_items, read_items, write_items
 
 MAX_THREAD_MESSAGES = 20
+APPLIED_NOTE = "[Applied to the status file.]"
+DECLINED_NOTE = "[NOT applied - the user declined this patch. The state is unchanged.]"
 
 
 @dataclass(frozen=True)
@@ -100,6 +103,25 @@ class Session:
 
         new_items = apply(ops, self.items)
         return PatchProposal(ops=ops, diffs=diff_items(self.items, new_items), request=text)
+
+    def accept(self, proposal: PatchProposal) -> list:
+        """Write the patch, refresh items, and record the applied turn."""
+        new_items = apply(proposal.ops, self.items)
+        backup(self.yaml_path)
+        write_items(self.yaml_path, new_items)
+        self.items = read_items(self.yaml_path)
+
+        summary = format_patch_result(proposal.ops)
+        self._append(proposal.request, f"{summary}\n\n{APPLIED_NOTE}")
+
+        path = history_path(self.yaml_path)
+        save_history(path, load_history(path), proposal.request, summary)
+        return self.items
+
+    def decline(self, proposal: PatchProposal) -> None:
+        """Record that the patch was rejected. Nothing is written."""
+        summary = format_patch_result(proposal.ops)
+        self._append(proposal.request, f"{summary}\n\n{DECLINED_NOTE}")
 
     def _retry(self, system: str, messages: list[dict], assistant_content, tool_use_id: str, errors: list[str]):
         """Feed validation errors back as a tool_result and ask once more.
