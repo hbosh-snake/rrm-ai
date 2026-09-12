@@ -82,3 +82,99 @@ def test_brief_command_calls_the_llm(capsys):
 
     session.submit.assert_called_once()
     assert "Operational Picture" in capsys.readouterr().out
+
+
+from pathlib import Path
+from textwrap import dedent
+from unittest.mock import patch
+
+from yaml_utils import read_items
+
+
+def test_archive_command_moves_finished_items_and_refreshes_the_session(tmp_path, capsys):
+    yaml_content = dedent("""\
+        - id: done_task
+          item: "Task: Done"
+          status: finished
+          today: false
+          next_action: "N/A"
+
+        - id: active_task
+          item: "Task: Active"
+          status: in_progress
+          today: true
+          next_action: "Keep working."
+    """)
+    src = tmp_path / "rrm-status.yaml"
+    src.write_text(yaml_content)
+
+    session = MagicMock()
+    session.yaml_path = str(src)
+    session.items = [{"id": "active_task", "item": "Task: Active", "status": "in_progress",
+                      "today": True, "next_action": "Keep working."}]
+
+    keep_going = handle_command("/archive", session, _console())
+
+    assert keep_going is True
+    session.start.assert_called_once()
+
+    remaining = read_items(str(src))
+    assert len(remaining) == 1
+    assert remaining[0]["id"] == "active_task"
+
+    archive = tmp_path / "rrm-archive.yaml"
+    assert archive.exists()
+    archived = read_items(str(archive))
+    assert archived[0]["id"] == "done_task"
+
+    assert Path(str(src) + ".bak").exists()
+
+    output = capsys.readouterr().out
+    assert "archived" in output.lower()
+
+
+def test_run_dispatches_each_result_kind_and_survives_a_ctrl_c(capsys):
+    from repl import run
+
+    session = MagicMock()
+    session.items = [{"id": "demo001", "item": "Activation: Demo", "status": "in_progress",
+                      "today": True, "next_action": "Do the thing."}]
+
+    def submit_side_effect(text):
+        if text == "ask something":
+            return TextReply("Here is the answer.")
+        if text == "an invalid change":
+            return ValidationFailure(["id not found"])
+        if text == "make a change":
+            return PatchProposal(ops=[], diffs=["+ x"], request=text)
+        if text == "trigger a crash":
+            raise RuntimeError("boom")
+        raise AssertionError(f"unexpected submit text: {text}")
+
+    session.submit.side_effect = submit_side_effect
+
+    prompts = [
+        "ask something",
+        KeyboardInterrupt(),
+        "trigger a crash",
+        "an invalid change",
+        "make a change",
+        EOFError(),
+    ]
+
+    fake_prompt_session = MagicMock()
+    fake_prompt_session.prompt.side_effect = prompts
+
+    with patch("repl.PromptSession", return_value=fake_prompt_session):
+        with patch("builtins.input", return_value="y"):
+            run(session, console=_console())
+
+    assert session.submit.call_count == 4
+    session.accept.assert_called_once()
+
+    output = capsys.readouterr().out
+    assert "Here is the answer." in output
+    assert "RuntimeError" in output and "boom" in output
+    assert "id not found" in output
+    assert "Proposed changes" in output
+    assert "Applied" in output
