@@ -8,6 +8,7 @@ dependencies = [
     "ruamel.yaml",
     "python-dotenv",
     "rich",
+    "prompt-toolkit>=3.0.53",
 ]
 
 [tool.setuptools]

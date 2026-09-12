@@ -7,15 +7,15 @@ from rich.markdown import Markdown
 from rich.theme import Theme
 
 from config import load_config, load_yaml_path
-from yaml_utils import read_items, write_items, backup, diff_items, archive_finished
+from yaml_utils import write_items, backup, diff_items, archive_finished
 from patch import PatchOp, validate, apply
 from adapters import get_adapter
 from prompts import build_system_prompt, build_user_message
 from daily_brief import build_daily_brief_prompt
 from memory import history_path, load_history, save_history, format_patch_result
 from theme import THEME, LLM_MARKDOWN_THEME
-from auto_today import auto_promote_today, load_auto_today_date, save_auto_today_date
 from render import print_status
+from session import Session, load_items
 
 
 def main() -> None:
@@ -34,6 +34,9 @@ def main() -> None:
     parser.add_argument(
         "--archive", action="store_true", help="Move finished items to archive"
     )
+    parser.add_argument(
+        "--brief", action="store_true", help="Print the daily operational picture and exit"
+    )
 
     args = parser.parse_args()
     if args.status or args.archive:
@@ -42,27 +45,10 @@ def main() -> None:
     else:
         config = load_config()
         yaml_path = config.yaml_path
-    auto_today_state = str(Path(yaml_path).with_name("rrm-auto-today.txt"))
     console = Console()
 
-    from datetime import date as _date
-    today = _date.today()
-    already_promoted_today = load_auto_today_date(auto_today_state) == today.strftime("%Y-%m-%d")
-
-    def maybe_promote(items: list) -> list:
-        if already_promoted_today:
-            return items
-        promoted = auto_promote_today(items, today=today)
-        if diff_items(items, promoted):
-            backup(yaml_path)
-            write_items(yaml_path, promoted)
-        save_auto_today_date(auto_today_state, today)
-        return promoted
-
     if args.status:
-        items = read_items(yaml_path)
-        items = maybe_promote(items)
-        print_status(items, console=console)
+        print_status(load_items(yaml_path), console=console)
         return
 
     if args.archive:
@@ -75,12 +61,18 @@ def main() -> None:
         console.print(f"[{THEME['success']}]Finished items archived.[/]")
         return
 
-    daily_brief = not args.text
+    if not args.text and not args.brief:
+        import repl
+
+        session = Session(yaml_path, get_adapter(config))
+        repl.run(session)
+        return
+
+    daily_brief = args.brief
     if daily_brief:
         args.text = build_daily_brief_prompt()
 
-    items = read_items(yaml_path)
-    items = maybe_promote(items)
+    items = load_items(yaml_path)
     adapter = get_adapter(config)
     hist_path = history_path(yaml_path)
     history = load_history(hist_path)

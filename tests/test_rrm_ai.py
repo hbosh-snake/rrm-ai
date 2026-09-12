@@ -332,3 +332,33 @@ class TestColoredOutput:
                 main()
         output = capsys.readouterr().out
         assert "Abort" in output
+
+
+class TestBriefFlag:
+    def test_brief_flag_prints_the_daily_picture(self, yaml_env, capsys):
+        mock_adapter = MagicMock()
+        mock_adapter.complete_messages.return_value = ("## Operational Picture", [], None)
+
+        with patch("sys.argv", ["rrm-ai", "--brief"]):
+            with patch("rrm_ai.get_adapter", return_value=mock_adapter):
+                main()
+
+        assert "Operational Picture" in capsys.readouterr().out
+
+    def test_brief_flag_does_not_start_the_repl(self, yaml_env):
+        mock_adapter = MagicMock()
+        mock_adapter.complete_messages.return_value = ("## Operational Picture", [], None)
+
+        with patch("sys.argv", ["rrm-ai", "--brief"]):
+            with patch("rrm_ai.get_adapter", return_value=mock_adapter):
+                with patch("repl.run") as mock_run:
+                    main()
+                    mock_run.assert_not_called()
+
+
+class TestBareInvocation:
+    def test_bare_invocation_starts_the_repl(self, yaml_env):
+        with patch("sys.argv", ["rrm-ai"]):
+            with patch("repl.run") as mock_run:
+                main()
+                mock_run.assert_called_once()

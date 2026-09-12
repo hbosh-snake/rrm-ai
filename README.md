@@ -54,6 +54,24 @@ Show current state without calling the LLM:
 rrm-ai --status
 ```
 
+Start an interactive session:
+
+```bash
+rrm-ai
+```
+
+The session prints the current list, then gives you a prompt. Type plain
+English to ask or to request changes; the conversation is remembered until
+you quit. Commands start with a slash:
+
+| Command | Effect |
+| --- | --- |
+| `/status` | Reprint the current list |
+| `/brief` | Daily operational picture |
+| `/archive` | Move finished items to the archive |
+| `/help` | List commands |
+| `/quit` | Exit (`Ctrl-D` works too) |
+
 Ask questions:
 
 ```bash
@@ -87,6 +105,7 @@ Useful flags:
 rrm-ai "mark Annual Report finished" --dry-run
 rrm-ai "mark Annual Report finished" --yes
 rrm-ai --archive
+rrm-ai --brief
 ```
 
 `--archive` moves finished items to `rrm-archive.yaml`. Local commands such as
