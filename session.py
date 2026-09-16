@@ -5,7 +5,7 @@ rendering and no user I/O, so a REPL, a TUI, or any other frontend can
 drive it through the same four methods.
 """
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
@@ -16,8 +16,8 @@ from prompts import build_system_prompt, build_user_message
 from yaml_utils import backup, diff_items, read_items, write_items
 
 MAX_THREAD_MESSAGES = 20
-APPLIED_NOTE = "[Applied to the status file.]"
-DECLINED_NOTE = "[NOT applied - the user declined this patch. The state is unchanged.]"
+APPLIED_RESULT = "Applied to the status file."
+DECLINED_RESULT = "NOT applied - the user declined this patch. The state is unchanged."
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,7 @@ class PatchProposal:
     ops: list[PatchOp]
     diffs: list[str]
     request: str
+    tool_use_id: str
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,12 @@ class Session:
         self.yaml_path = yaml_path
         self.adapter = adapter
         self.items: list = []
-        self.thread: list[dict] = []
+        self.exchanges: list[list[dict]] = []
+
+    @property
+    def thread(self) -> list[dict]:
+        """All recorded messages, oldest first."""
+        return [m for exchange in self.exchanges for m in exchange]
 
     def start(self) -> list:
         """Load items and return them. Does not call the LLM."""
@@ -102,7 +108,9 @@ class Session:
             return ValidationFailure(errors)
 
         new_items = apply(ops, self.items)
-        return PatchProposal(ops=ops, diffs=diff_items(self.items, new_items), request=text)
+        return PatchProposal(
+            ops=ops, diffs=diff_items(self.items, new_items), request=text, tool_use_id=tool_use_id
+        )
 
     def accept(self, proposal: PatchProposal) -> list:
         """Write the patch, refresh items, and record the applied turn."""
@@ -111,17 +119,15 @@ class Session:
         write_items(self.yaml_path, new_items)
         self.items = read_items(self.yaml_path)
 
-        summary = format_patch_result(proposal.ops)
-        self._append(proposal.request, f"{summary}\n\n{APPLIED_NOTE}")
+        self._append_patch(proposal, APPLIED_RESULT)
 
         path = history_path(self.yaml_path)
-        save_history(path, load_history(path), proposal.request, summary)
+        save_history(path, load_history(path), proposal.request, format_patch_result(proposal.ops))
         return self.items
 
     def decline(self, proposal: PatchProposal) -> None:
         """Record that the patch was rejected. Nothing is written."""
-        summary = format_patch_result(proposal.ops)
-        self._append(proposal.request, f"{summary}\n\n{DECLINED_NOTE}")
+        self._append_patch(proposal, DECLINED_RESULT)
 
     def _retry(self, system: str, messages: list[dict], assistant_content, tool_use_id: str, errors: list[str]):
         """Feed validation errors back as a tool_result and ask once more.
@@ -147,12 +153,32 @@ class Session:
         return self.adapter.complete_messages(system, retry_messages)
 
     def _append(self, user_text: str, assistant_text: str) -> None:
-        """Record one alternating pair and trim to the cap."""
-        self.thread.append({"role": "user", "content": user_text})
-        self.thread.append({"role": "assistant", "content": assistant_text})
-        self._trim()
+        """Record a prose exchange."""
+        self._add_exchange([
+            {"role": "user", "content": user_text},
+            {"role": "assistant", "content": assistant_text},
+        ])
 
-    def _trim(self) -> None:
-        """Drop oldest pairs so the thread stays capped and starts with a user turn."""
+    def _append_patch(self, proposal: PatchProposal, outcome: str) -> None:
+        """Record a patch exchange as a real tool_use and its tool_result.
+
+        Storing the call as text taught the model to answer with the text
+        instead of calling the tool.
+        """
+        ops = [{k: v for k, v in asdict(op).items() if v is not None} for op in proposal.ops]
+        self._add_exchange([
+            {"role": "user", "content": proposal.request},
+            {"role": "assistant", "content": [{
+                "type": "tool_use", "id": proposal.tool_use_id,
+                "name": "apply_patch", "input": {"operations": ops},
+            }]},
+            {"role": "user", "content": [{
+                "type": "tool_result", "tool_use_id": proposal.tool_use_id, "content": outcome,
+            }]},
+        ])
+
+    def _add_exchange(self, messages: list[dict]) -> None:
+        """Append one exchange, dropping whole old exchanges to stay under the cap."""
+        self.exchanges.append(messages)
         while len(self.thread) > MAX_THREAD_MESSAGES:
-            del self.thread[:2]
+            del self.exchanges[0]

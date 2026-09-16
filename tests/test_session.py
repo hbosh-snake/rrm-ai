@@ -228,12 +228,11 @@ import json
 from pathlib import Path
 
 from memory import history_path
-from session import APPLIED_NOTE, DECLINED_NOTE
 from yaml_utils import read_items
 
 
 def _propose(session, ops, request="change it"):
-    session.adapter.results = [(ops, [], None)]
+    session.adapter.results = [(ops, [], "tool_1")]
     return session.submit(request)
 
 
@@ -266,17 +265,22 @@ def test_accept_creates_a_backup(session, sample_yaml_file):
     assert Path(str(sample_yaml_file) + ".bak").exists()
 
 
-def test_accept_records_an_alternating_pair(session):
+def test_accept_records_a_tool_use_and_its_result(session):
     session.start()
     proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")], "put it on waiting")
 
     session.accept(proposal)
 
-    assert len(session.thread) == 2
-    assert session.thread[0] == {"role": "user", "content": "put it on waiting"}
-    assert session.thread[1]["role"] == "assistant"
-    assert "set_status(emsn230, waiting)" in session.thread[1]["content"]
-    assert APPLIED_NOTE in session.thread[1]["content"]
+    user, call, result = session.thread
+    assert user == {"role": "user", "content": "put it on waiting"}
+    assert call == {"role": "assistant", "content": [{
+        "type": "tool_use", "id": "tool_1", "name": "apply_patch",
+        "input": {"operations": [{"op": "set_status", "id": "emsn230", "value": "waiting"}]},
+    }]}
+    assert result["role"] == "user"
+    assert result["content"][0]["type"] == "tool_result"
+    assert result["content"][0]["tool_use_id"] == "tool_1"
+    assert "Applied" in result["content"][0]["content"]
 
 
 def test_accept_appends_to_history_file(session, sample_yaml_file):
@@ -306,9 +310,10 @@ def test_decline_records_the_rejection_explicitly(session):
 
     session.decline(proposal)
 
-    assert session.thread[1]["role"] == "assistant"
-    assert DECLINED_NOTE in session.thread[1]["content"]
-    assert "set_status(emsn230, waiting)" in session.thread[1]["content"]
+    call, result = session.thread[1], session.thread[2]
+    assert call["content"][0]["type"] == "tool_use"
+    assert result["content"][0]["tool_use_id"] == call["content"][0]["id"]
+    assert "NOT applied" in result["content"][0]["content"]
 
 
 def test_decline_writes_no_history(session, sample_yaml_file):
@@ -320,7 +325,7 @@ def test_decline_writes_no_history(session, sample_yaml_file):
     assert not Path(history_path(str(sample_yaml_file))).exists()
 
 
-def test_thread_alternates_after_mixed_turns(session):
+def test_thread_orders_roles_after_mixed_turns(session):
     session.start()
     session.adapter.results = [("a text answer", [], None)]
     session.submit("a question")
@@ -328,7 +333,7 @@ def test_thread_alternates_after_mixed_turns(session):
     session.accept(proposal)
 
     roles = [m["role"] for m in session.thread]
-    assert roles == ["user", "assistant", "user", "assistant"]
+    assert roles == ["user", "assistant", "user", "assistant", "user"]
 
 
 def test_thread_trims_to_the_cap_oldest_pair_first(session):
@@ -339,7 +344,22 @@ def test_thread_trims_to_the_cap_oldest_pair_first(session):
 
     assert len(session.thread) == 20
     assert session.thread[0] == {"role": "user", "content": "question 2"}
-    assert session.thread[0]["role"] == "user"
+
+
+def test_trimming_never_orphans_a_tool_result(session):
+    session.start()
+    for n in range(8):
+        proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")], f"change {n}")
+        session.decline(proposal)
+
+    assert len(session.thread) <= 20
+    assert session.thread[0] == {"role": "user", "content": "change 2"}
+    ids_used = {m["content"][0]["id"] for m in session.thread if m["role"] == "assistant"}
+    ids_answered = {
+        m["content"][0]["tool_use_id"] for m in session.thread
+        if m["role"] == "user" and isinstance(m["content"], list)
+    }
+    assert ids_used == ids_answered
 
 
 def test_retry_turns_stay_out_of_the_thread(session):
@@ -351,5 +371,7 @@ def test_retry_turns_stay_out_of_the_thread(session):
     proposal = session.submit("put Sri Lanka on waiting")
     session.accept(proposal)
 
-    assert len(session.thread) == 2
-    assert all("tool_result" not in str(m["content"]) for m in session.thread)
+    assert len(session.thread) == 3
+    assert session.thread[1]["content"][0]["id"] == "tool_2"
+    assert "tool_1" not in str(session.thread)
+    assert "Validation failed" not in str(session.thread)

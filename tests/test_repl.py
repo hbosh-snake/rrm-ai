@@ -142,7 +142,7 @@ def test_apply_prompt_ctrl_c_declines_and_the_loop_continues(capsys):
 
     def submit_side_effect(text):
         if text == "make a change":
-            return PatchProposal(ops=[], diffs=["+ x"], request=text)
+            return PatchProposal(ops=[], diffs=["+ x"], request=text, tool_use_id="tool_1")
         raise AssertionError(f"unexpected submit text: {text}")
 
     session.submit.side_effect = submit_side_effect
@@ -170,7 +170,7 @@ def test_apply_prompt_eof_error_declines_and_the_loop_continues(capsys):
 
     def submit_side_effect(text):
         if text == "make a change":
-            return PatchProposal(ops=[], diffs=["+ x"], request=text)
+            return PatchProposal(ops=[], diffs=["+ x"], request=text, tool_use_id="tool_1")
         raise AssertionError(f"unexpected submit text: {text}")
 
     session.submit.side_effect = submit_side_effect
@@ -212,7 +212,7 @@ def test_exception_in_slash_command_does_not_crash_the_loop(capsys):
     "result, expected_snippet",
     [
         (ValidationFailure(["id not found"]), "id not found"),
-        (PatchProposal(ops=[], diffs=["+ x"], request="brief"), "Proposed changes"),
+        (PatchProposal(ops=[], diffs=["+ x"], request="brief", tool_use_id="tool_1"), "Proposed changes"),
     ],
 )
 def test_brief_command_shows_output_for_non_text_reply(capsys, result, expected_snippet):
@@ -239,7 +239,7 @@ def test_run_dispatches_each_result_kind_and_survives_a_ctrl_c(capsys):
         if text == "an invalid change":
             return ValidationFailure(["id not found"])
         if text == "make a change":
-            return PatchProposal(ops=[], diffs=["+ x"], request=text)
+            return PatchProposal(ops=[], diffs=["+ x"], request=text, tool_use_id="tool_1")
         if text == "trigger a crash":
             raise RuntimeError("boom")
         raise AssertionError(f"unexpected submit text: {text}")
