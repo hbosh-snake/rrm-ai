@@ -16,7 +16,7 @@ All optional fields (`today`, `due`, `recurs`) are fully implemented and stable:
 - `adapters.py`: tool schema and parser support all six ops (`set_status`, `set_today`, `set_next_action`, `set_due`, `set_recurs`, `add_item`)
 - `yaml_utils.py`: read/write/diff handle optional fields
 - `auto_today.py`: promotes `due` and `recurs` items to `today` automatically
-- Test suite: 248 tests, all green
+- Test suite: 250 tests, all green
 
 ---
 
@@ -51,7 +51,7 @@ Every new module must be added to `py-modules` in `pyproject.toml` before reinst
 
 ## Codebase Overview
 
-**Stack:** Python, Anthropic Claude API (`claude-sonnet-4-5-20250929`), `ruamel.yaml`, `rich`, `python-dotenv`  
+**Stack:** Python, Anthropic Claude API (`claude-haiku-4-5` for patches and queries, `claude-sonnet-5` for the brief), `ruamel.yaml`, `rich`, `python-dotenv`  
 **Structure:** Flat module layout — one file per concern. No packages, no sub-directories for source.  
 **Pipeline:** user text → `adapters.py` (LLM tool call) → `patch.py` (validate + apply) → `yaml_utils.py` (write)
 

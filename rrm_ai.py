@@ -80,7 +80,7 @@ def main() -> None:
     system = build_system_prompt()
     user_msg = build_user_message(args.text, items, None if daily_brief else history)
     messages = [{"role": "user", "content": user_msg}]
-    result, assistant_content, tool_use_id = adapter.complete_messages(system, messages)
+    result, assistant_content, tool_use_id = adapter.complete_messages(system, messages, brief=daily_brief)
 
     if isinstance(result, str):
         # Query response — text only

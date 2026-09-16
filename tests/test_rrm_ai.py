@@ -285,7 +285,7 @@ class TestHistoryIntegration:
 
         captured_msg = {}
 
-        def capture(system, messages):
+        def capture(system, messages, brief=False):
             captured_msg["user"] = messages[0]["content"]
             return ("All good.", [], None)
 
@@ -344,6 +344,7 @@ class TestBriefFlag:
                 main()
 
         assert "Operational Picture" in capsys.readouterr().out
+        assert mock_adapter.complete_messages.call_args.kwargs == {"brief": True}
 
     def test_brief_flag_does_not_start_the_repl(self, yaml_env):
         mock_adapter = MagicMock()

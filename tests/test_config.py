@@ -28,10 +28,12 @@ def test_load_config_defaults(monkeypatch):
     monkeypatch.setenv("RRM_AI_YAML", "/tmp/test.yaml")
     monkeypatch.delenv("RRM_AI_PROVIDER", raising=False)
     monkeypatch.delenv("RRM_AI_MODEL", raising=False)
+    monkeypatch.delenv("RRM_AI_BRIEF_MODEL", raising=False)
 
     cfg = load_config()
     assert cfg.provider == "anthropic"
-    assert cfg.model == "claude-sonnet-4-5-20250929"
+    assert cfg.model == "claude-haiku-4-5"
+    assert cfg.brief_model == "claude-sonnet-5"
 
 
 def test_load_config_missing_api_key(monkeypatch):

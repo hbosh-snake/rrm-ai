@@ -80,7 +80,7 @@ def handle_command(name: str, session, console: Console) -> bool:
         console.print(f"[{THEME['success']}]Finished items archived.[/]")
         print_status(session.items, console=console)
     elif name == "/brief":
-        result = session.submit(build_daily_brief_prompt())
+        result = session.submit(build_daily_brief_prompt(), brief=True)
         _dispatch_result(result, session, console)
     elif name == "/undo":
         _handle_undo(session, console)

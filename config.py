@@ -10,6 +10,7 @@ class Config:
     model: str
     api_key: str
     yaml_path: str
+    brief_model: str = "claude-sonnet-5"
 
 
 def _load_env() -> None:
@@ -35,7 +36,8 @@ def load_config() -> Config:
 
     return Config(
         provider=os.environ.get("RRM_AI_PROVIDER", "anthropic"),
-        model=os.environ.get("RRM_AI_MODEL", "claude-sonnet-4-5-20250929"),
+        model=os.environ.get("RRM_AI_MODEL", "claude-haiku-4-5"),
         api_key=api_key,
         yaml_path=yaml_path,
+        brief_model=os.environ.get("RRM_AI_BRIEF_MODEL", "claude-sonnet-5"),
     )

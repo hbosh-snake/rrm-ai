@@ -107,7 +107,7 @@ rrm-ai/
 - `--status`: read YAML + print sorted display, no LLM
 - `--archive`: move finished items to `rrm-archive.yaml`
 - `<text>`: NL → LLM → patch → validate → diff → confirm → write
-- `(no args)`: daily brief mode (no history sent to LLM)
+- `--brief`: daily brief on `brief_model` (no history sent to LLM)
 
 **Gotchas:**
 - Confirmation accepts `""` (Enter) or `"y"` — anything else aborts
@@ -124,10 +124,10 @@ rrm-ai/
 
 **TOOL_SCHEMA:** Single tool `apply_patch` with input `{ operations: [...] }`. Each operation requires `op` (enum of 6 ops) and `id`. Other fields are op-dependent.
 
-**`complete_messages()` returns:** `(result, raw_assistant_content, tool_use_id)` — caller uses raw content + tool_use_id to build a retry turn.
+**`complete_messages()` returns:** `(result, raw_assistant_content, tool_use_id)` — caller uses raw content + tool_use_id to build a retry turn. `brief=True` switches to `config.brief_model` with `max_tokens=8000` (room for Sonnet 5's default thinking).
 
 **Gotchas:**
-- `max_tokens=1024` is hardcoded — could limit large status files
+- `max_tokens=1024` for non-brief calls — could limit large status files
 - Mixed text+tool response: text preamble is silently discarded
 - `get_adapter()` raises `ValueError` for any provider except `"anthropic"`
 
@@ -210,8 +210,8 @@ rrm-ai/
 **Purpose:** Loads config from environment variables (with `.env` file support).  
 **Key exports:** `Config` (frozen dataclass), `load_config()`, `load_yaml_path()`
 
-**`Config` fields:** `provider`, `model`, `api_key`, `yaml_path`  
-**Defaults:** `provider="anthropic"`, `model="claude-sonnet-4-5-20250929"`
+**`Config` fields:** `provider`, `model`, `api_key`, `yaml_path`, `brief_model`  
+**Defaults:** `provider="anthropic"`, `model="claude-haiku-4-5"`, `brief_model="claude-sonnet-5"` (used for `/brief` and `--brief`)
 
 **Gotchas:**
 - `load_dotenv()` is called on every invocation — tests use `autouse` fixture to block real `.env` from bleeding in
@@ -235,10 +235,10 @@ rrm-ai/
 
 ### `daily_brief.py` — Daily Brief Prompt
 
-**Purpose:** Generates the fixed prompt for no-argument "daily brief" mode.  
+**Purpose:** Generates the fixed prompt for `/brief` and `--brief`.  
 **Key exports:** `build_daily_brief_prompt()`
 
-**Behavior:** Returns a prescriptive prompt instructing the LLM to produce an "Operational Picture" with four sections (Today, In Progress, Waiting, Notes) in a fixed format. History is explicitly not passed in this mode.
+**Behavior:** Returns a prescriptive prompt instructing the LLM to produce an "Operational Picture" with four sections (Today, In Progress, Waiting, Notes) in a fixed format. Waiting lines carry due/recurs tags. Notes is limited to facts: waiting items that are really the user's own work, items due within 7 days that are not in progress, and items blocking two or more others. Sent to `brief_model`; history is not passed in `--brief`.
 
 ---
 
@@ -309,7 +309,7 @@ All sibling files of the primary YAML (set via `RRM_AI_YAML`):
 
 - Every new module must be added to `py-modules` in `pyproject.toml` before reinstalling
 - `requirements.txt` is stale — does not include `rich`; `pyproject.toml` is authoritative
-- `max_tokens=1024` in `adapters.py` could become a limit for very large status files
+- `max_tokens=1024` for non-brief calls in `adapters.py` could become a limit for very large status files
 - The ruamel.yaml blank-line bug in `auto_today.py:_set_today_clean()` is the most complex workaround in the codebase
 - `/undo` only swaps `rrm-status.yaml` with its `.bak`; undoing `/archive` leaves the moved items in `rrm-archive.yaml` too
 

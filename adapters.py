@@ -106,16 +106,17 @@ class AnthropicAdapter:
         self.client = Anthropic(api_key=config.api_key)
 
     def complete_messages(
-        self, system: str, messages: list[dict]
+        self, system: str, messages: list[dict], brief: bool = False
     ) -> tuple[str | list[PatchOp], list, str | None]:
         """Return (result, raw_assistant_content, tool_use_id).
 
         raw_assistant_content and tool_use_id are needed to construct a
-        tool_result follow-up turn when validation fails.
+        tool_result follow-up turn when validation fails. brief=True routes
+        to the brief model, whose thinking needs a larger token budget.
         """
         response = self.client.messages.create(
-            model=self.config.model,
-            max_tokens=1024,
+            model=self.config.brief_model if brief else self.config.model,
+            max_tokens=8000 if brief else 1024,
             system=system,
             messages=messages,
             tools=[TOOL_SCHEMA],

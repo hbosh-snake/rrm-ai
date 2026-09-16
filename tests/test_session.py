@@ -13,8 +13,8 @@ class FakeAdapter:
         self.results = list(results)
         self.calls = []
 
-    def complete_messages(self, system, messages):
-        self.calls.append({"system": system, "messages": messages})
+    def complete_messages(self, system, messages, brief=False):
+        self.calls.append({"system": system, "messages": messages, "brief": brief})
         return self.results.pop(0)
 
 
@@ -106,6 +106,15 @@ def test_only_the_newest_message_holds_a_snapshot(session):
     messages = session.adapter.calls[1]["messages"]
     snapshot_count = sum(1 for m in messages if "annual_report" in m["content"])
     assert snapshot_count == 1
+
+
+def test_submit_passes_the_brief_flag_to_the_adapter(session):
+    session.start()
+    session.adapter.results = [("picture", [], None)]
+
+    session.submit("brief me", brief=True)
+
+    assert session.adapter.calls[0]["brief"] is True
 
 
 def test_failed_api_call_leaves_thread_untouched(session):

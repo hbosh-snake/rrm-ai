@@ -34,7 +34,8 @@ Edit `.env`:
 RRM_AI_API_KEY=sk-...
 RRM_AI_YAML=/absolute/path/to/rrm-status.yaml
 RRM_AI_PROVIDER=anthropic
-RRM_AI_MODEL=claude-sonnet-4-5-20250929
+RRM_AI_MODEL=claude-haiku-4-5
+RRM_AI_BRIEF_MODEL=claude-sonnet-5
 ```
 
 Keep `rrm-status.yaml` outside this repository. The repo is code; the YAML file
@@ -67,7 +68,7 @@ you quit. Commands start with a slash:
 | Command | Effect |
 | --- | --- |
 | `/status` | Reprint the current list |
-| `/brief` | Daily operational picture |
+| `/brief` | Daily operational picture (uses `RRM_AI_BRIEF_MODEL`) |
 | `/archive` | Move finished items to the archive |
 | `/undo` | Revert the last change (a second `/undo` redoes it) |
 | `/help` | List commands |

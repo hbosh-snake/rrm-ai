@@ -80,7 +80,7 @@ def test_brief_command_calls_the_llm(capsys):
 
     handle_command("/brief", session, _console())
 
-    session.submit.assert_called_once()
+    assert session.submit.call_args.kwargs == {"brief": True}
     assert "Operational Picture" in capsys.readouterr().out
 
 

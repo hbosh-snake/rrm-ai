@@ -81,14 +81,14 @@ class Session:
         self.items = load_items(self.yaml_path)
         return self.items
 
-    def submit(self, text: str):
+    def submit(self, text: str, brief: bool = False):
         """Send one user turn. Returns TextReply, PatchProposal, or ValidationFailure."""
         system = build_system_prompt()
         messages = self.thread + [
             {"role": "user", "content": build_user_message(text, self.items)}
         ]
         result, assistant_content, tool_use_id = self.adapter.complete_messages(
-            system, messages
+            system, messages, brief=brief
         )
         retry_errors = None
 

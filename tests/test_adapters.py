@@ -141,6 +141,17 @@ class TestAnthropicAdapter:
         assert len(tools) == 1
         assert tools[0]["name"] == "apply_patch"
 
+    def test_brief_uses_the_brief_model_and_a_larger_budget(self):
+        adapter = AnthropicAdapter(_make_config())
+        adapter.client = MagicMock()
+        adapter.client.messages.create.return_value = _mock_text_response("ok")
+
+        adapter.complete_messages("sys", [], brief=True)
+
+        kwargs = adapter.client.messages.create.call_args.kwargs
+        assert kwargs["model"] == "claude-sonnet-5"
+        assert kwargs["max_tokens"] == 8000
+
 
 class TestGetAdapter:
     def test_get_anthropic_adapter(self):
