@@ -150,3 +150,15 @@ class TestGetAdapter:
     def test_get_unknown_adapter_raises(self):
         with pytest.raises(ValueError, match="openai"):
             get_adapter(_make_config("openai"))
+
+
+def test_add_item_without_today_defaults_to_false():
+    from adapters import _parse_tool_input
+
+    ops = _parse_tool_input({"operations": [
+        {"op": "add_item", "id": "x", "item": "X", "status": "waiting", "next_action": "Do it."},
+        {"op": "set_status", "id": "y", "value": "waiting"},
+    ]})
+
+    assert ops[0].today is False
+    assert ops[1].today is None

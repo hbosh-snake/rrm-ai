@@ -52,7 +52,7 @@ TOOL_SCHEMA = {
                         },
                         "today": {
                             "type": "boolean",
-                            "description": "Today flag (for add_item only)",
+                            "description": "Today flag (for add_item only, defaults to false)",
                         },
                         "next_action": {
                             "type": "string",
@@ -79,8 +79,11 @@ TOOL_SCHEMA = {
 
 
 def _parse_tool_input(tool_input: dict) -> list[PatchOp]:
+    """Build PatchOps from the tool call. add_item without today means today=false."""
     ops = []
     for raw in tool_input["operations"]:
+        if raw["op"] == "add_item":
+            raw = {"today": False, **raw}
         ops.append(
             PatchOp(
                 op=raw["op"],
