@@ -19,6 +19,7 @@ from yaml_utils import backup, diff_items, read_items, write_items
 MAX_THREAD_MESSAGES = 20
 APPLIED_RESULT = "Applied to the status file."
 DECLINED_RESULT = "NOT applied - the user declined this patch. The state is unchanged."
+UNDONE_NOTE = "The last change to the status file was reverted. The current state is authoritative."
 
 
 @dataclass(frozen=True)
@@ -138,6 +139,26 @@ class Session:
         """Record that the patch was rejected. Nothing is written."""
         self._append_patch(proposal, DECLINED_RESULT)
         self._log_outcome("decline", proposal)
+
+    def undo_diffs(self) -> list[str] | None:
+        """Changes an undo would make, or None when there is no backup."""
+        backup_path = Path(self.yaml_path + ".bak")
+        if not backup_path.exists():
+            return None
+        return diff_items(self.items, read_items(str(backup_path)))
+
+    def undo(self) -> list:
+        """Swap the status file with its backup, so a second undo redoes."""
+        current = Path(self.yaml_path)
+        backup_path = Path(self.yaml_path + ".bak")
+        swap = Path(self.yaml_path + ".swap")
+        current.rename(swap)
+        backup_path.rename(current)
+        swap.rename(backup_path)
+        self.items = read_items(self.yaml_path)
+        self._append("/undo", UNDONE_NOTE)
+        log_turn(self.yaml_path, {"ts": datetime.now().isoformat(), "kind": "undo"})
+        return self.items
 
     def _retry(self, system: str, messages: list[dict], assistant_content, tool_use_id: str, errors: list[str]):
         """Feed validation errors back as a tool_result and ask once more.

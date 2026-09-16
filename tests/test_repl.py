@@ -8,7 +8,7 @@ def test_blank_input_is_empty():
     assert parse_input("   ") == ("empty", "")
 
 
-@pytest.mark.parametrize("name", ["/status", "/brief", "/archive", "/help", "/quit"])
+@pytest.mark.parametrize("name", ["/status", "/brief", "/archive", "/undo", "/help", "/quit"])
 def test_known_commands_are_recognised(name):
     assert parse_input(name) == ("command", name)
 
@@ -34,7 +34,7 @@ def test_command_with_trailing_words_is_unknown():
 
 
 def test_every_command_has_help_text():
-    assert set(COMMANDS) == {"/status", "/brief", "/archive", "/help", "/quit"}
+    assert set(COMMANDS) == {"/status", "/brief", "/archive", "/undo", "/help", "/quit"}
     assert all(COMMANDS.values())
 
 
@@ -66,7 +66,7 @@ def test_status_command_renders_without_calling_the_llm(capsys):
 def test_help_command_lists_every_command(capsys):
     handle_command("/help", MagicMock(), _console())
     output = capsys.readouterr().out
-    for name in ["/status", "/brief", "/archive", "/help", "/quit"]:
+    for name in ["/status", "/brief", "/archive", "/undo", "/help", "/quit"]:
         assert name in output
 
 
@@ -271,3 +271,51 @@ def test_run_dispatches_each_result_kind_and_survives_a_ctrl_c(capsys):
     assert "id not found" in output
     assert "Proposed changes" in output
     assert "Applied" in output
+
+
+def test_undo_command_without_backup_says_nothing_to_undo(capsys):
+    session = MagicMock()
+    session.undo_diffs.return_value = None
+
+    assert handle_command("/undo", session, _console()) is True
+
+    session.undo.assert_not_called()
+    assert "Nothing to undo" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("answer", ["", "n", KeyboardInterrupt()])
+def test_undo_command_defaults_to_no(answer, capsys):
+    session = MagicMock()
+    session.undo_diffs.return_value = ["  demo  status: finished → waiting"]
+
+    with patch("builtins.input", side_effect=[answer]):
+        handle_command("/undo", session, _console())
+
+    session.undo.assert_not_called()
+    output = capsys.readouterr().out
+    assert "status: finished" in output
+    assert "Not reverted" in output
+
+
+def test_undo_command_reverts_on_yes(capsys):
+    session = MagicMock()
+    session.items = []
+    session.undo_diffs.return_value = ["  demo  status: finished → waiting"]
+
+    with patch("builtins.input", return_value="y"):
+        handle_command("/undo", session, _console())
+
+    session.undo.assert_called_once()
+    assert "Reverted" in capsys.readouterr().out
+
+
+def test_undo_command_warns_that_restored_items_stay_archived(tmp_path, capsys):
+    (tmp_path / "rrm-archive.yaml").write_text("[]\n")
+    session = MagicMock()
+    session.yaml_path = str(tmp_path / "rrm-status.yaml")
+    session.undo_diffs.return_value = ["  + done_task  added: Task: Done"]
+
+    with patch("builtins.input", return_value="n"):
+        handle_command("/undo", session, _console())
+
+    assert "rrm-archive.yaml" in capsys.readouterr().out

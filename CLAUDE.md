@@ -16,7 +16,7 @@ All optional fields (`today`, `due`, `recurs`) are fully implemented and stable:
 - `adapters.py`: tool schema and parser support all six ops (`set_status`, `set_today`, `set_next_action`, `set_due`, `set_recurs`, `add_item`)
 - `yaml_utils.py`: read/write/diff handle optional fields
 - `auto_today.py`: promotes `due` and `recurs` items to `today` automatically
-- Test suite: 147 tests, all green
+- Test suite: 248 tests, all green
 
 ---
 

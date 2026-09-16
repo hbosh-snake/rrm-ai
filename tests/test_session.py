@@ -477,3 +477,52 @@ def test_decline_logs_an_outcome_entry(session, sample_yaml_file):
     entries = _read_transcript(sample_yaml_file)
     assert entries[-1]["kind"] == "decline"
     assert entries[-1]["request"] == "put it on waiting"
+
+
+def _write_backup_without_budget_review(session):
+    """Simulate an earlier write whose backup lacks budget_review."""
+    from yaml_utils import read_items, write_items
+    items = read_items(session.yaml_path)
+    write_items(session.yaml_path + ".bak", items[:2])
+
+
+def test_undo_diffs_is_none_without_a_backup(session):
+    session.start()
+    assert session.undo_diffs() is None
+
+
+def test_undo_diffs_describes_the_revert(session):
+    session.start()
+    _write_backup_without_budget_review(session)
+    assert session.undo_diffs() == ["  - budget_review  removed: Task: Budget Review"]
+
+
+def test_undo_swaps_file_and_backup_and_reloads(session):
+    session.start()
+    _write_backup_without_budget_review(session)
+
+    items = session.undo()
+
+    assert [i["id"] for i in items] == ["annual_report", "emsn230"]
+    assert session.items == items
+    assert session.undo_diffs() == ["  + budget_review  added: Task: Budget Review"]
+
+
+def test_second_undo_redoes(session):
+    session.start()
+    _write_backup_without_budget_review(session)
+
+    session.undo()
+    items = session.undo()
+
+    assert len(items) == 3
+
+
+def test_undo_tells_the_model(session):
+    session.start()
+    _write_backup_without_budget_review(session)
+
+    session.undo()
+
+    assert session.thread[-2]["content"] == "/undo"
+    assert "reverted" in session.thread[-1]["content"]

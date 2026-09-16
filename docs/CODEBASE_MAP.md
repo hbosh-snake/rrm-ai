@@ -61,7 +61,7 @@ rrm-ai/
 ├── config.py          # Config from env vars / .env file
 ├── memory.py          # Rolling 5-entry conversation history
 ├── theme.py           # Rich terminal color/style constants
-├── tests/             # pytest test suite (~147 tests)
+├── tests/             # pytest test suite (~248 tests)
 │   ├── conftest.py
 │   ├── test_adapters.py
 │   ├── test_auto_today.py
@@ -168,7 +168,7 @@ rrm-ai/
 
 **`write_items()`:** Serializes via `ruamel.yaml`, then `_normalize_item_spacing()` enforces one blank line between top-level items, no blank lines within an item.
 
-**`diff_items()`:** Compares by ID. Fields diffed: `status`, `today`, `due`, `recurs`, `next_action`. Reports new IDs as additions. Does not detect removed items.
+**`diff_items()`:** Compares by ID. Fields diffed: `status`, `today`, `due`, `recurs`, `next_action`. Reports new IDs as additions and missing IDs as removals (removals only arise from `/undo`).
 
 **Gotchas:**
 - `preserve_quotes=True` — quoted strings in original YAML are re-quoted on write
@@ -290,7 +290,7 @@ All sibling files of the primary YAML (set via `RRM_AI_YAML`):
 | File | Purpose |
 |---|---|
 | `rrm-status.yaml` | Primary task data |
-| `rrm-status.yaml.bak` | Overwritten backup before every write |
+| `rrm-status.yaml.bak` | Overwritten backup before every write; `/undo` swaps it with the primary file |
 | `rrm-archive.yaml` | Finished items accumulate here |
 | `rrm-archive.yaml.bak` | Backup of archive before extension |
 | `rrm-history.json` | Rolling 5-entry conversation history |
@@ -311,7 +311,7 @@ All sibling files of the primary YAML (set via `RRM_AI_YAML`):
 - `requirements.txt` is stale — does not include `rich`; `pyproject.toml` is authoritative
 - `max_tokens=1024` in `adapters.py` could become a limit for very large status files
 - The ruamel.yaml blank-line bug in `auto_today.py:_set_today_clean()` is the most complex workaround in the codebase
-- `diff_items()` does not detect removed items (no deletion op exists, so this is by design)
+- `/undo` only swaps `rrm-status.yaml` with its `.bak`; undoing `/archive` leaves the moved items in `rrm-archive.yaml` too
 
 ## Navigation Guide
 

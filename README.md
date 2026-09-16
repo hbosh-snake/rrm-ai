@@ -69,6 +69,7 @@ you quit. Commands start with a slash:
 | `/status` | Reprint the current list |
 | `/brief` | Daily operational picture |
 | `/archive` | Move finished items to the archive |
+| `/undo` | Revert the last change (a second `/undo` redoes it) |
 | `/help` | List commands |
 | `/quit` | Exit (`Ctrl-D` works too) |
 

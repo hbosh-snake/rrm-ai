@@ -18,6 +18,7 @@ THEME = {
     "diff_header": "bold",
     "diff_add": "green",
     "diff_change": "cyan",
+    "diff_remove": "red",
     # Errors
     "error_header": "bold red",
     "error_line": "red",

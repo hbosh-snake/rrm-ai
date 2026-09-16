@@ -83,6 +83,10 @@ def diff_items(old: list, new: list) -> list[str]:
             if old_val != new_val:
                 diffs.append(f"  {item_id}  {field}: {old_val} \u2192 {new_val}")
 
+    for item_id, old_item in old_by_id.items():
+        if item_id not in new_by_id:
+            diffs.append(f"  - {item_id}  removed: {old_item['item']}")
+
     return diffs
 
 

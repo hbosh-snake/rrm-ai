@@ -22,6 +22,7 @@ COMMANDS = {
     "/status": "Reprint the current item list",
     "/brief": "Ask for the daily operational picture",
     "/archive": "Move finished items to the archive",
+    "/undo": "Revert the last change to the status file",
     "/help": "Show this list",
     "/quit": "Exit the session",
 }
@@ -44,6 +45,7 @@ def parse_input(text: str) -> tuple[str, str]:
 
 
 PROMPT = "rrm> "
+DIFF_STYLES = {"+": THEME["diff_add"], "-": THEME["diff_remove"]}
 
 
 def _print_markdown(text: str, console: Console) -> None:
@@ -55,7 +57,7 @@ def _print_markdown(text: str, console: Console) -> None:
 def _print_diffs(diffs: list[str], console: Console) -> None:
     console.print(f"[{THEME['diff_header']}]Proposed changes:[/]")
     for d in diffs:
-        style = THEME["diff_add"] if d.strip().startswith("+") else THEME["diff_change"]
+        style = DIFF_STYLES.get(d.strip()[0], THEME["diff_change"])
         console.print(f"  [{style}]•{d}[/]")
 
 
@@ -80,7 +82,32 @@ def handle_command(name: str, session, console: Console) -> bool:
     elif name == "/brief":
         result = session.submit(build_daily_brief_prompt())
         _dispatch_result(result, session, console)
+    elif name == "/undo":
+        _handle_undo(session, console)
     return True
+
+
+def _handle_undo(session, console: Console) -> None:
+    """Show what an undo would change and revert only on an explicit yes."""
+    diffs = session.undo_diffs()
+    if diffs is None:
+        console.print(f"[{THEME['aborted']}]Nothing to undo.[/]")
+        return
+    _print_diffs(diffs, console)
+    archive_path = Path(session.yaml_path).with_name("rrm-archive.yaml")
+    if archive_path.exists() and any(d.strip().startswith("+") for d in diffs):
+        console.print(f"[{THEME['aborted']}]If these items came from /archive, "
+                      f"they also stay in {archive_path.name}.[/]")
+    try:
+        answer = input("\nRevert? [y/N] ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        answer = ""
+    if answer != "y":
+        console.print(f"[{THEME['aborted']}]Not reverted.[/]")
+        return
+    session.undo()
+    console.print(f"[{THEME['success']}]Reverted.[/]")
+    print_status(session.items, console=console)
 
 
 def _dispatch_result(result, session, console: Console) -> None:

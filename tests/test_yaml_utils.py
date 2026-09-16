@@ -284,3 +284,9 @@ def test_archive_appends_to_existing(tmp_path):
     assert len(archived) == 2
     assert archived[0]["id"] == "done1"
     assert archived[1]["id"] == "done2"
+
+
+def test_diff_items_detects_removed_item(sample_yaml_file):
+    items = read_items(str(sample_yaml_file))
+    diffs = diff_items(items, items[:2])
+    assert diffs == ["  - budget_review  removed: Task: Budget Review"]
