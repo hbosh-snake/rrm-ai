@@ -375,3 +375,105 @@ def test_retry_turns_stay_out_of_the_thread(session):
     assert session.thread[1]["content"][0]["id"] == "tool_2"
     assert "tool_1" not in str(session.thread)
     assert "Validation failed" not in str(session.thread)
+
+
+from transcript import transcript_path
+
+
+def _read_transcript(yaml_file):
+    lines = Path(transcript_path(str(yaml_file))).read_text().splitlines()
+    return [json.loads(l) for l in lines]
+
+
+def test_start_prunes_old_transcripts(session, sample_yaml_file, tmp_path):
+    from datetime import date, timedelta
+
+    from transcript import KEEP_DAYS, log_turn
+
+    old_day = date.today() - timedelta(days=KEEP_DAYS + 3)
+    log_turn(str(sample_yaml_file), {"kind": "submit"}, day=old_day)
+    for i in range(KEEP_DAYS):
+        log_turn(str(sample_yaml_file), {"kind": "submit"}, day=date.today() - timedelta(days=i))
+
+    session.start()
+
+    assert not Path(transcript_path(str(sample_yaml_file), old_day)).exists()
+
+
+def test_submit_logs_a_text_reply(session, sample_yaml_file):
+    session.start()
+    session.adapter.results = [("Annual Report is in focus.", [], None)]
+
+    session.submit("what is in focus?")
+
+    entries = _read_transcript(sample_yaml_file)
+    assert len(entries) == 1
+    assert entries[0]["kind"] == "submit"
+    assert entries[0]["result_kind"] == "text"
+    assert entries[0]["response_text"] == "Annual Report is in focus."
+    assert entries[0]["retried"] is False
+    assert "what is in focus?" in entries[0]["messages"][-1]["content"]
+
+
+def test_submit_logs_a_patch_proposal(session, sample_yaml_file):
+    session.start()
+    ops = [PatchOp(op="set_status", id="emsn230", value="waiting")]
+    session.adapter.results = [(ops, [], None)]
+
+    session.submit("put Sri Lanka on waiting")
+
+    entries = _read_transcript(sample_yaml_file)
+    assert entries[0]["result_kind"] == "patch_proposal"
+    assert entries[0]["ops"] == [{
+        "op": "set_status", "id": "emsn230", "value": "waiting",
+        "item": None, "status": None, "today": None,
+        "next_action": None, "due": None, "recurs": None,
+    }]
+
+
+def test_submit_logs_a_validation_failure(session, sample_yaml_file):
+    session.start()
+    bad = [PatchOp(op="set_status", id="nonexistent", value="waiting")]
+    session.adapter.results = [(bad, [], None)]
+
+    session.submit("change something")
+
+    entries = _read_transcript(sample_yaml_file)
+    assert entries[0]["result_kind"] == "validation_failure"
+    assert any("nonexistent" in e for e in entries[0]["errors"])
+
+
+def test_submit_logs_retried_flag(session, sample_yaml_file):
+    session.start()
+    bad = [PatchOp(op="set_status", id="nonexistent", value="waiting")]
+    good = [PatchOp(op="set_status", id="emsn230", value="waiting")]
+    session.adapter.results = [(bad, [], "tool_1"), (good, [], "tool_2")]
+
+    session.submit("put Sri Lanka on waiting")
+
+    entries = _read_transcript(sample_yaml_file)
+    assert entries[0]["retried"] is True
+    assert any("nonexistent" in e for e in entries[0]["retry_errors"])
+
+
+def test_accept_logs_an_outcome_entry(session, sample_yaml_file):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")], "put it on waiting")
+
+    session.accept(proposal)
+
+    entries = _read_transcript(sample_yaml_file)
+    assert entries[-1]["kind"] == "accept"
+    assert entries[-1]["request"] == "put it on waiting"
+    assert entries[-1]["ops"][0]["id"] == "emsn230"
+
+
+def test_decline_logs_an_outcome_entry(session, sample_yaml_file):
+    session.start()
+    proposal = _propose(session, [PatchOp(op="set_status", id="emsn230", value="waiting")], "put it on waiting")
+
+    session.decline(proposal)
+
+    entries = _read_transcript(sample_yaml_file)
+    assert entries[-1]["kind"] == "decline"
+    assert entries[-1]["request"] == "put it on waiting"

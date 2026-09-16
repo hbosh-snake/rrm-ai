@@ -111,6 +111,9 @@ rrm-ai --brief
 `--archive` moves finished items to `rrm-archive.yaml`. Local commands such as
 `--status` and `--archive` only need `RRM_AI_YAML`; they do not need an API key.
 
+Interactive sessions write a debug log of every turn to `rrm-transcripts/`,
+next to the YAML file, one JSONL file per day. Logs from the last 5 days are kept.
+
 ## YAML Format
 
 Minimal item:

@@ -6,13 +6,14 @@ drive it through the same four methods.
 """
 
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from auto_today import auto_promote_today, load_auto_today_date, save_auto_today_date
 from memory import format_patch_result, history_path, load_history, save_history
 from patch import PatchOp, apply, validate
 from prompts import build_system_prompt, build_user_message
+from transcript import log_turn, prune
 from yaml_utils import backup, diff_items, read_items, write_items
 
 MAX_THREAD_MESSAGES = 20
@@ -75,6 +76,7 @@ class Session:
 
     def start(self) -> list:
         """Load items and return them. Does not call the LLM."""
+        prune(self.yaml_path)
         self.items = load_items(self.yaml_path)
         return self.items
 
@@ -87,27 +89,33 @@ class Session:
         result, assistant_content, tool_use_id = self.adapter.complete_messages(
             system, messages
         )
+        retry_errors = None
 
         if isinstance(result, str):
             self._append(text, result)
+            self._log_submit(messages, retry_errors, result_kind="text", response_text=result)
             return TextReply(result)
 
         ops = result
         errors = validate(ops, self.items)
 
         if errors and tool_use_id is not None:
-            retried = self._retry(system, messages, assistant_content, tool_use_id, errors)
-            result, assistant_content, tool_use_id = retried
+            retry_errors = errors
+            retry_result = self._retry(system, messages, assistant_content, tool_use_id, errors)
+            result, assistant_content, tool_use_id = retry_result
             if isinstance(result, str):
                 self._append(text, result)
+                self._log_submit(messages, retry_errors, result_kind="text", response_text=result)
                 return TextReply(result)
             ops = result
             errors = validate(ops, self.items)
 
         if errors:
+            self._log_submit(messages, retry_errors, result_kind="validation_failure", errors=errors)
             return ValidationFailure(errors)
 
         new_items = apply(ops, self.items)
+        self._log_submit(messages, retry_errors, result_kind="patch_proposal", ops=ops)
         return PatchProposal(
             ops=ops, diffs=diff_items(self.items, new_items), request=text, tool_use_id=tool_use_id
         )
@@ -120,6 +128,7 @@ class Session:
         self.items = read_items(self.yaml_path)
 
         self._append_patch(proposal, APPLIED_RESULT)
+        self._log_outcome("accept", proposal)
 
         path = history_path(self.yaml_path)
         save_history(path, load_history(path), proposal.request, format_patch_result(proposal.ops))
@@ -128,6 +137,7 @@ class Session:
     def decline(self, proposal: PatchProposal) -> None:
         """Record that the patch was rejected. Nothing is written."""
         self._append_patch(proposal, DECLINED_RESULT)
+        self._log_outcome("decline", proposal)
 
     def _retry(self, system: str, messages: list[dict], assistant_content, tool_use_id: str, errors: list[str]):
         """Feed validation errors back as a tool_result and ask once more.
@@ -151,6 +161,33 @@ class Session:
             },
         ]
         return self.adapter.complete_messages(system, retry_messages)
+
+    def _log_submit(self, messages: list[dict], retry_errors: list[str] | None, result_kind: str, **fields) -> None:
+        """Write one debug transcript entry for a submit() call.
+
+        retry_errors holds the first attempt's validation errors when a retry happened.
+        """
+        if "ops" in fields:
+            fields["ops"] = [asdict(op) for op in fields["ops"]]
+        entry = {
+            "ts": datetime.now().isoformat(),
+            "kind": "submit",
+            "messages": messages,
+            "retried": retry_errors is not None,
+            "retry_errors": retry_errors,
+            "result_kind": result_kind,
+            **fields,
+        }
+        log_turn(self.yaml_path, entry)
+
+    def _log_outcome(self, kind: str, proposal: PatchProposal) -> None:
+        """Write one debug transcript entry for accept() or decline()."""
+        log_turn(self.yaml_path, {
+            "ts": datetime.now().isoformat(),
+            "kind": kind,
+            "request": proposal.request,
+            "ops": [asdict(op) for op in proposal.ops],
+        })
 
     def _append(self, user_text: str, assistant_text: str) -> None:
         """Record a prose exchange."""

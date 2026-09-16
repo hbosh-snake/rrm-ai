@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["rrm_ai", "adapters", "config", "patch", "prompts", "yaml_utils", "memory", "theme", "daily_brief", "auto_today", "render", "session", "repl"]
+py-modules = ["rrm_ai", "adapters", "config", "patch", "prompts", "yaml_utils", "memory", "theme", "daily_brief", "auto_today", "render", "session", "repl", "transcript"]
 
 [project.scripts]
 rrm-ai = "rrm_ai:main"
