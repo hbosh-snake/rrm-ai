@@ -19,10 +19,13 @@ Give me the operational picture. Use this exact structure — no deviations:
 (omit due/recurs if not set)
 
 ### Waiting
-(items with status waiting, one per line as: - **id** — next_action)
+(items with status waiting, one per line as: - **id** — next_action [due: DATE] [recurs: RULE])
+(omit due/recurs if not set)
 
 ### Notes
-(one or two sentences max; flag drift or blockers only; omit this section entirely if nothing notable)
+(one or two sentences max; omit this section entirely if nothing notable)
+(flag only: items marked waiting whose next_action is the user's own work; items due within 7 days that are not in_progress; items that block two or more others)
+(state facts only, no advice)
 
 Do not add extra sections, counts in headers, separators, or decorative text.
 """
