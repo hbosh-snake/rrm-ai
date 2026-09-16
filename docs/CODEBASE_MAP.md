@@ -238,7 +238,7 @@ rrm-ai/
 **Purpose:** Generates the fixed prompt for `/brief` and `--brief`.  
 **Key exports:** `build_daily_brief_prompt()`
 
-**Behavior:** Returns a prescriptive prompt instructing the LLM to produce an "Operational Picture" with four sections (Today, In Progress, Waiting, Notes) in a fixed format. Waiting lines carry due/recurs tags. Notes is limited to facts: waiting items that are really the user's own work, items due within 7 days that are not in progress, and items blocking two or more others. Sent to `brief_model`; history is not passed in `--brief`.
+**Behavior:** Returns a prescriptive prompt instructing the LLM to produce an "Operational Picture" with four sections (Today, In Progress, Waiting, Notes) in a fixed format. Waiting lines carry due/recurs tags. Notes is limited to facts: waiting items that are really the user's own work, items due within 7 days that are not in progress, and items blocking two or more others that are neither today nor in progress. Sent to `brief_model`; history is not passed in `--brief`.
 
 ---
 

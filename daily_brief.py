@@ -24,7 +24,7 @@ Give me the operational picture. Use this exact structure — no deviations:
 
 ### Notes
 (one or two sentences max; omit this section entirely if nothing notable)
-(flag only: items marked waiting whose next_action is the user's own work; items due within 7 days that are not in_progress; items that block two or more others)
+(flag only: items marked waiting whose next_action is the user's own work; items due within 7 days that are not in_progress; items that block two or more others and are neither today nor in_progress)
 (state facts only, no advice)
 
 Do not add extra sections, counts in headers, separators, or decorative text.
